@@ -1,7 +1,7 @@
-import pandas as pd
+from pandas import read_csv
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.preprocessing import StandardScaler
 
 def main():
     
@@ -12,7 +12,7 @@ def main():
             names.append(f'Feature{i+1}')
         return names
 
-    df = pd.read_csv("data.csv", header=None, names=['ID'] + get_names())
+    df = read_csv("data.csv", header=None, names=['ID'] + get_names())
     df.drop(df.columns[0], axis=1, inplace=True)
 
     scaler = StandardScaler()
@@ -36,6 +36,9 @@ def main():
     plt.subplot(212)
     plot_swarm(df.columns[mid_point+1:])
     plt.show()
+
+    # relevantFeaturesNb = ['1', '3', '4', '7', '8', '11', '13', '14', '21', '23', '24', '28']
+    
 
 if __name__ == "__main__":
     main()
