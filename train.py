@@ -1,14 +1,7 @@
-
-# Goal:
-# network = model.createNetwork([
-#     layers.DenseLayer(input_shape, activation='sigmoid'),
-#     layers.DenseLayer(24, activation='sigmoid', weights_initializer='heUniform'),
-#     layers.DenseLayer(24, activation='sigmoid', weights_initializer='heUniform'),
-#     layers.DenseLayer(output_shape, activation='softmax', weights_initializer='heUniform')
-# ])
-# model.fit(network, data_train, data_valid, loss='categoricalCrossentropy', learning_rate=0.0314, batch_size=8, epochs=84)
-
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class activations:
     @staticmethod
@@ -119,9 +112,11 @@ class mlp:
             layers[i + 1].init_weights(input_units)
         return layers[1:]
 
-    def fit(self, X_train, y_train, loss='categoricalCrossentropy', learning_rate=0.01, batch_size=32, epochs=10, verbose=False):
+    def fit(self, X_train, y_train, X_valid, y_valid, loss='categoricalCrossentropy', learning_rate=0.01, batch_size=32, epochs=10, verbose=False):
         self.X_train = X_train
         self.y_train = y_train
+        self.X_valid = X_valid
+        self.y_valid = y_valid
         self.loss_function = self.get_loss_function(loss)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -144,46 +139,101 @@ class mlp:
             np.random.shuffle(indices)
             X_train_shuffled = self.X_train[indices]
             y_train_shuffled = self.y_train[indices]
+            
+            train_avg_loss, train_avg_accuracy = self.trainEpoch(X_train_shuffled, y_train_shuffled)
+            valid_loss, valid_accuracy = self.validationRun()
 
-            epoch_loss = 0
-            correct_predictions = 0
-
-            for i in range(0, self.X_train.shape[0], self.batch_size):
-                X_batch = X_train_shuffled[i:i + self.batch_size]
-                y_batch = y_train_shuffled[i:i + self.batch_size]
-
-                # Forward pass
-                inputs = [X_batch]
-                for layer in self.layers:
-                    inputs.append(layer.forward(inputs[-1]))
-
-                # Compute loss
-                loss_value = self.loss_function(y_batch, inputs[-1])
-                epoch_loss += loss_value * X_batch.shape[0]
-                
-                # Check accuracy for this batch
-                preds = np.argmax(inputs[-1], axis=1)
-                labels = np.argmax(y_batch, axis=1)
-                correct_predictions += np.sum(preds == labels)
-
-                # Backward pass
-                next_error_term = self.layers[-1].backward(inputs[-2], inputs[-1], y_batch, False, self.learning_rate)
-                for j in range(len(self.layers) - 2, -1, -1):
-                    next_error_term = self.layers[j].backward(inputs[j], inputs[j + 1], next_error_term, True, self.learning_rate)
-
-            avg_loss = epoch_loss / self.X_train.shape[0]
-            accuracy = correct_predictions / self.X_train.shape[0]
-            history.append({'epoch': epoch, 'loss': avg_loss, 'accuracy': accuracy})
+            history.append({
+                'epoch': epoch, 
+                'train_loss': train_avg_loss, 
+                'train_accuracy': train_avg_accuracy, 
+                'val_loss': valid_loss, 
+                'val_accuracy': valid_accuracy
+            })
             if self.verbose:
-                print(f"\rEpoch {epoch + 1}/{self.epochs} - Loss: {avg_loss:.5f} - Accuracy: {accuracy:.5f}", end="")
-                # print(f"Epoch {epoch + 1}/{self.epochs} - Loss: {avg_loss:.5f} - Accuracy: {accuracy:.5f}")
+                print(f"Epoch {epoch + 1}/{self.epochs} - Loss: {train_avg_loss:.5f} - Valid_loss: {valid_loss:.5f} - Accuracy: {train_avg_accuracy:.5f} - Valid_accuracy: {valid_accuracy:.5f}")
+            else:
+                up = "\033[2A" if epoch > 0 else ""
+                print(f"{up}\rEpoch {epoch + 1}/{self.epochs}\033[K\n"
+                    + f" - Loss: {train_avg_loss:.5f} - Valid_loss: {valid_loss:.5f}\033[K\n"
+                    + f" - Accuracy: {train_avg_accuracy:.5f} - Valid_accuracy: {valid_accuracy:.5f}\033[K", end="")
+                if epoch == self.epochs - 1:
+                    print()
         
         return history
 
-import pandas as pd
+    def trainEpoch(self, X_train, y_train):
+        epoch_loss = 0
+        correct_predictions = 0
+
+        for i in range(0, self.X_train.shape[0], self.batch_size):
+            X_batch = X_train[i:i + self.batch_size]
+            y_batch = y_train[i:i + self.batch_size]
+            
+            batch_loss, train_accuracy = self.trainBatch(X_batch, y_batch)
+            epoch_loss += batch_loss
+            correct_predictions += train_accuracy
+
+        train_avg_loss = epoch_loss / self.X_train.shape[0]
+        train_avg_accuracy = correct_predictions / self.X_train.shape[0]        
+        return train_avg_loss, train_avg_accuracy
+
+    def trainBatch(self, X_batch, y_batch):
+        # Forward pass
+        inputs = [X_batch]
+        for layer in self.layers:
+            inputs.append(layer.forward(inputs[-1]))
+
+        # Backward pass
+        next_error_term = self.layers[-1].backward(inputs[-2], inputs[-1], y_batch, False, self.learning_rate)
+        for j in range(len(self.layers) - 2, -1, -1):
+            next_error_term = self.layers[j].backward(inputs[j], inputs[j + 1], next_error_term, True, self.learning_rate)
+
+        # Calculate batch loss and accuracy
+        batch_loss = self.loss_function(y_batch, inputs[-1]) * X_batch.shape[0]
+        correct_predictions = self.compute_accuracy(inputs[-1], y_batch)
+        return batch_loss, correct_predictions
+
+    def validationRun(self):
+        valid_inputs = [self.X_valid]
+        for layer in self.layers:
+            valid_inputs.append(layer.forward(valid_inputs[-1]))
+
+        valid_loss = self.loss_function(self.y_valid, valid_inputs[-1])
+        valid_accuracy = self.compute_accuracy(valid_inputs[-1], self.y_valid, False)
+        return valid_loss, valid_accuracy
+
+    def compute_accuracy(self, y_pred, y_true, for_batch=True):
+        preds = np.argmax(y_pred, axis=1)
+        labels = np.argmax(y_true, axis=1)
+        if for_batch:
+            return np.sum(preds == labels)
+        return np.mean(preds == labels)
+    
+    def show_history(self, history):
+        history_df = pd.DataFrame(history)
+        plt.figure(figsize=(12, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(history_df['epoch'], history_df['train_loss'], label='Train Loss')
+        plt.plot(history_df['epoch'], history_df['val_loss'], label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Loss over Epochs')
+        plt.legend()
+
+        plt.subplot(1, 2, 2)
+        plt.plot(history_df['epoch'], history_df['train_accuracy'], label='Train Accuracy')
+        plt.plot(history_df['epoch'], history_df['val_accuracy'], label='Validation Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.title('Accuracy over Epochs')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
 def main():
     data_train = pd.read_csv("data_train.csv")
+    data_valid = pd.read_csv("data_valid.csv")
 
     input_units = data_train.drop('Diagnosis', axis=1).shape[1]
     output_units = len(data_train['Diagnosis'].unique())
@@ -197,19 +247,25 @@ def main():
 
     X_train = data_train.drop('Diagnosis', axis=1).values
     y_train = pd.get_dummies(data_train['Diagnosis']).values
+    X_valid = data_valid.drop('Diagnosis', axis=1).values
+    y_valid = pd.get_dummies(data_valid['Diagnosis']).values
 
     history = model.fit(
         X_train, 
         y_train, 
+        X_valid, 
+        y_valid,
         loss='categoricalCrossentropy', 
-        learning_rate=0.0314, 
-        batch_size=10, 
-        epochs=500, 
-        verbose=True
+        learning_rate=0.01, 
+        batch_size=8, 
+        epochs=100
+        # verbose=True
     )
 
     history_df = pd.DataFrame(history)
-    history_df.to_csv("training_history.csv", index=False)
+    history_df.to_csv("train_history.csv", index=False)
+
+    model.show_history(history)
 
                 
 if __name__ == "__main__":
