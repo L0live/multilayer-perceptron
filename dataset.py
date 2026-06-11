@@ -4,20 +4,12 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 
 def main():
-    
-    # On charge les données et on affiche les statistiques descriptives avant et après le nettoyage
-    def get_names(range_=30):
-        names = ['Diagnosis']
-        for i in range(range_):
-            names.append(f'Feature{i+1}')
-        return names
 
-    df = read_csv("data.csv", header=None, names=['ID'] + get_names())
-    df.drop(df.columns[0], axis=1, inplace=True)
+    df = read_csv("data.csv", header=None, names=['ID', 'Diagnosis'] + [f'Feature{i+1}' for i in range(30)])
+    df.drop('ID', axis=1, inplace=True)
 
     scaler = StandardScaler()
-    for feature in df.columns[1:]:
-        df[feature] = scaler.fit_transform(df[[feature]])
+    df[df.columns[1:]] = scaler.fit_transform(df[df.columns[1:]])
 
     def plot_swarm(value_vars):
         df_melted = df.melt(id_vars=[df.columns[0]], value_vars=value_vars, var_name='Features', value_name='Value')

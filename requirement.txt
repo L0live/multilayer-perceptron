@@ -1,1 +1,3 @@
-pandas seaborn scikit-learn
+pandas
+seaborn
+scikit-learn
