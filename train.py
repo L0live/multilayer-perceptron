@@ -133,6 +133,10 @@ class mlp:
 
     def train(self):
         history = []
+        best_val_loss = float('inf')
+        wait = 0
+        patience = 10
+        best_weights = None
         for epoch in range(self.epochs):
             # Shuffle the training data
             indices = np.arange(self.X_train.shape[0])
@@ -159,6 +163,25 @@ class mlp:
                     + f" - Accuracy: {train_avg_accuracy:.5f} - Valid_accuracy: {valid_accuracy:.5f}\033[K", end="")
                 if epoch == self.epochs - 1:
                     print()
+            
+            if valid_loss < best_val_loss:
+                best_val_loss = valid_loss
+                wait = 0
+                # snapshot des poids/biais de chaque couche
+                best_weights = [(l.weights.copy(), l.biases.copy()) for l in self.layers]
+            else:
+                wait += 1
+                if wait >= patience:
+                    print(f"\n\nEarly stopping at epoch {epoch + 1}")
+                    break
+
+        if best_weights is not None:
+            for l, (w, b) in zip(self.layers, best_weights):
+                l.weights, l.biases = w, b
+        
+        best_val_loss_epoch = min(history, key=lambda x: x['val_loss'])['epoch'] + 1
+        
+        print(f"Best validation loss: {best_val_loss:.5f} in epoch: {best_val_loss_epoch}")
         
         return history
 
@@ -240,8 +263,8 @@ def main():
 
     model = mlp([
         layer(input_units),
-        layer(24, activation='sigmoid', weights_initializer='glorotUniform'),
-        layer(24, activation='sigmoid', weights_initializer='glorotUniform'),
+        layer(16, activation='sigmoid', weights_initializer='glorotUniform'),
+        layer(16, activation='sigmoid', weights_initializer='glorotUniform'),
         layer(output_units, activation='softmax', weights_initializer='glorotUniform')
     ])
 
@@ -265,7 +288,7 @@ def main():
     history_df = pd.DataFrame(history)
     history_df.to_csv("train_history.csv", index=False)
 
-    model.show_history(history)
+    # model.show_history(history)
 
                 
 if __name__ == "__main__":
