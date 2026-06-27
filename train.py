@@ -252,7 +252,10 @@ class mlp:
         plt.title('Accuracy over Epochs')
         plt.legend()
         plt.tight_layout()
+        plt.savefig('loss_n_acc_w_train_n_valid.png')
         plt.show()
+
+        
 
 def main():
     data_train = pd.read_csv("data_train.csv")
@@ -288,7 +291,7 @@ def main():
     history_df = pd.DataFrame(history)
     history_df.to_csv("train_history.csv", index=False)
 
-    # model.show_history(history)
+    model.show_history(history)
 
                 
 if __name__ == "__main__":
